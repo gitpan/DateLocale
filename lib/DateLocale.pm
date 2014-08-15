@@ -4,7 +4,8 @@ use strict;
 use utf8;
 use POSIX qw/setlocale/;
 use Locale::Messages qw(:locale_h :libintl_h);
-our $VERSION = '0.09';
+use Encode;
+our $VERSION = '0.45';
 our $LANG;
 
 sub import {
@@ -16,6 +17,7 @@ sub import {
 
 sub locale {
 	my $pkg = '';
+	local $SIG{__DIE__};
 	if( $LANG ){
 		$LANG =~ s/^([a-zA-Z_]+).*$/$1/;
 		my $tmp = "DateLocale::Language::$LANG";
@@ -28,7 +30,6 @@ sub locale {
 		$tmp = "DateLocale::Language::$tmp";
 		eval "use $tmp;";
 		$pkg = $tmp unless $@;
-		print $@;
 	}
 	$pkg ||= 'C';
 	return $pkg;
@@ -43,7 +44,7 @@ sub _fmt_redef {
 
 my %ext_formaters = (
     'long' => {
-        'less_1min'         => sub { dgettext("perl-DateLocale", 'recent' ) },
+        'less_1min'         => sub {dgettext("perl-DateLocale", 'recent' ) },
         'less_1hour'        => sub { 
             my ($date, $secs_diff) = @_; 
             my $mins = int($secs_diff / 60) || 0;
@@ -59,7 +60,7 @@ my %ext_formaters = (
 			return strftime(dgettext("perl-DateLocale", 'yesterday' ), @$date );
 		},
         'between_2_5days'   => sub {    
-            my ($date, $secs_diff) = @_;        
+            my ($date, $secs_diff) = @_;
             return lc(strftime("%A", @$date));
         },
         'this_year'         => sub { 
@@ -68,7 +69,7 @@ my %ext_formaters = (
         },
         'before_year'       => sub {
             my ($date, $secs_diff) = @_;
-            return strftime("%d %b %y", @$date);
+            return lc(strftime("%d %b %y", @$date));
         },
     },
     'long_tooltip' => {
@@ -89,7 +90,7 @@ my %ext_formaters = (
         },
         'between_2_5days'   => sub {    
             my ($date, $secs_diff) = @_;        
-			return strftime(dgettext("perl-DateLocale", 'weekdaywithtime' ), @$date);
+			return lc(strftime(dgettext("perl-DateLocale", 'weekdaywithtime' ), @$date));
         },
         'this_year'         => sub { 
             my ($date, $secs_diff) = @_;
@@ -144,34 +145,34 @@ sub format_date_ext {
     my ($days, $seconds, $date, $format) = @_;
     my $formated;
     for my $f (@$format) {
-        my $formater = $ext_formaters{$f};
+        my $formater = sub { my $name = shift; my $ret = $ext_formaters{$f}->{$name}->(@_); Encode::_utf8_on($ret); return $ret;};
         die "Format $f not supported" unless $formater;
         if ($days > 1) {
             #more than 1 day ago
             if($days > 1 && $days < 5) {
                 #less than 5 days and more than 1 day ago
-                $formated->{$f} = $formater->{between_2_5days}->($date, $seconds);
+                $formated->{$f} = $formater->('between_2_5days', $date, $seconds);
             } elsif (strftime("%j", @$date) > $days) {
                 #at this year
-                $formated->{$f} = $formater->{this_year}->($date, $seconds);
+                $formated->{$f} = $formater->('this_year', $date, $seconds);
             } else {
                 #not at this year
-                $formated->{$f} = $formater->{before_year}->($date, $seconds);
+                $formated->{$f} = $formater->('before_year', $date, $seconds);
             }
         } elsif ($days == 1) {
             #yesterday
-            $formated->{$f} = $formater->{yesterday}->($date, $seconds);
+            $formated->{$f} = $formater->( 'yesterday', $date, $seconds);
         } else {
             #today
             if($seconds < 60) {
                 #less than 1 minute
-                $formated->{$f} = $formater->{less_1min}->($date, $seconds);
+                $formated->{$f} = $formater->('less_1min', $date, $seconds);
             } elsif ($seconds < 60*60) {
                 #less than 1 hour
-                $formated->{$f} = $formater->{less_1hour}->($date, $seconds);
+                $formated->{$f} = $formater->('less_1hour', $date, $seconds);
             } else {
                 #more than 1 hour
-                $formated->{$f} = $formater->{today}->($date, $seconds);
+                $formated->{$f} = $formater->('today', $date, $seconds);
             }
         }
     }
@@ -192,7 +193,9 @@ Same as POSIX::strftime
 sub strftime {
 	my ($fmt) = shift;
 	my $fmt_redef = _fmt_redef($fmt, @_);
-	return POSIX::strftime($fmt_redef, @_);
+	my $ret = POSIX::strftime($fmt_redef, @_);
+	Encode::_utf8_on( $ret );
+	return $ret;
 } 
 
 =head2 occured_date
