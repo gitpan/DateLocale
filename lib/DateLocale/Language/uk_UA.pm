@@ -1,4 +1,4 @@
-package DateLocale::Language::ru_RU;
+package DateLocale::Language::uk_UA;
 
 #use utf8;
 use strict;
