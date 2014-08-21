@@ -2,17 +2,13 @@ package DateLocale;
 
 use strict;
 use utf8;
-use FindBin;
 use POSIX qw/setlocale/;
 use Locale::Messages qw(:locale_h :libintl_h);
 use Encode;
-our $VERSION = '1.05';
+our $VERSION = '1.10';
 
 sub import {
 	my $path = __FILE__;
-	if( $path !~ m{^/} ){
-		$path = $FindBin::Bin.'/'.$path;
-	}
 	$path =~ s{\.pm$}{/share/locale};
 	textdomain "perl-DateLocale";
 	bindtextdomain "perl-DateLocale", $path;
